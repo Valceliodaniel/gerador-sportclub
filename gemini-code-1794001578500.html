@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador Central - Sportech</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.292.0/lucide.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function App() {
+            const [view, setView] = useState('inicio'); // inicio, criar, biblioteca
+            
+            // Estados do Assistente de Criação
+            const [step, setStep] = useState(1);
+            const [clubName, setClubName] = useState('');
+            const [appName, setAppName] = useState('');
+            const [appUrl, setAppUrl] = useState('');
+            const [logoBase64, setLogoBase64] = useState(null);
+            
+            // Estado Global Simulando o Sheets (Para exibir na tela imediatamente)
+            const [apps, setApps] = useState([]);
+
+            // Atualiza os ícones sempre que a tela muda
+            useEffect(() => {
+                lucide.createIcons();
+            });
+
+            // Processamento do Canvas para Base64 Comprimido
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_SIZE = 150; // Essencial para caber no Google Sheets!
+                        
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height && width > MAX_SIZE) {
+                            height *= MAX_SIZE / width;
+                            width = MAX_SIZE;
+                        } else if (height > MAX_SIZE) {
+                            width *= MAX_SIZE / height;
+                            height = MAX_SIZE;
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Comprime em JPEG para economizar caracteres na célula do Sheets
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                        setLogoBase64(compressedBase64);
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            };
+
+            const salvarAppNoSheets = () => {
+                // Muda o texto do botão para mostrar que está carregando
+                const btn = document.getElementById('btn-gerar');
+                if(btn) btn.innerText = "Salvando no servidor...";
+
+                const novoApp = {
+                    id: Date.now(),
+                    clubName,
+                    appName,
+                    appUrl,
+                    logo: logoBase64,
+                    status: 'ATIVO',
+                    data: new Date().toLocaleDateString()
+                };
+
+                // Enviando os dados para a sua API do Google Sheets
+                fetch('https://script.google.com/macros/s/AKfycbxF9zIRgDaJZf9RYfduLMAsLyMaHtQG3g-vTt0cCojK50nJMXa008EgBGiHKFJpKBc/exec', {
+                    method: 'POST',
+                    mode: 'no-cors', // Evita bloqueio de CORS do navegador
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(novoApp)
+                }).then(() => {
+                    alert('Aplicativo Gerado e Salvo com Sucesso no Google Sheets!');
+                    
+                    // Adiciona na tela e limpa o formulário
+                    setApps([...apps, novoApp]);
+                    setStep(1); setClubName(''); setAppName(''); setAppUrl(''); setLogoBase64(null);
+                    setView('biblioteca');
+                }).catch(error => {
+                    alert('Ocorreu um erro ao tentar salvar no servidor.');
+                    console.error(error);
+                });
+            };
+
+            return (
+                <div className="flex h-screen overflow-hidden">
+                    {/* MENU LATERAL FIXO */}
+                    <aside className="w-64 glass-panel flex flex-col p-4 border-r border-slate-700">
+                        <h1 className="text-xl font-bold text-blue-400 mb-8 flex items-center">
+                            <i data-lucide="cpu" className="mr-2"></i> SPORTECH
+                        </h1>
+                        <nav className="flex flex-col gap-2">
+                            <button onClick={() => setView('inicio')} className={`p-3 rounded text-left flex items-center ${view === 'inicio' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
+                                <i data-lucide="layout-dashboard" className="mr-3 w-5"></i> Início
+                            </button>
+                            <button onClick={() => setView('biblioteca')} className={`p-3 rounded text-left flex items-center ${view === 'biblioteca' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
+                                <i data-lucide="smartphone" className="mr-3 w-5"></i> Biblioteca
+                            </button>
+                            <button onClick={() => setView('criar')} className={`p-3 rounded text-left flex items-center ${view === 'criar' ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
+                                <i data-lucide="plus-circle" className="mr-3 w-5"></i> Gerar Novo App
+                            </button>
+                        </nav>
+                    </aside>
+
+                    {/* ÁREA DE CONTEÚDO */}
+                    <main className="flex-1 p-8 overflow-y-auto">
+                        
+                        {view === 'inicio' && (
+                            <div>
+                                <h2 className="text-2xl font-bold mb-6">Painel de Controle</h2>
+                                <div className="grid grid-cols-3 gap-6">
+                                    <div className="glass-panel p-6 rounded-lg text-center border-t-4 border-blue-500">
+                                        <h3 className="text-slate-400">Total de Apps</h3>
+                                        <p className="text-4xl font-bold mt-2">{apps.length}</p>
+                                    </div>
+                                    <div className="glass-panel p-6 rounded-lg text-center border-t-4 border-green-500">
+                                        <h3 className="text-slate-400">Apps Ativos</h3>
+                                        <p className="text-4xl font-bold mt-2">{apps.filter(a => a.status === 'ATIVO').length}</p>
+                                    </div>
+                                    <div className="glass-panel p-6 rounded-lg text-center border-t-4 border-red-500">
+                                        <h3 className="text-slate-400">Apps Bloqueados</h3>
+                                        <p className="text-4xl font-bold mt-2">{apps.filter(a => a.status === 'BLOQUEADO').length}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {view === 'criar' && (
+                            <div className="max-w-2xl mx-auto glass-panel p-8 rounded-lg">
+                                <h2 className="text-2xl font-bold mb-6 text-center text-blue-400">Gerador de App - Etapa {step} de 4</h2>
+                                
+                                {step === 1 && (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm mb-1">Nome do Clube</label>
+                                            <input type="text" className="w-full bg-slate-800 p-3 rounded border border-slate-600" value={clubName} onChange={e => setClubName(e.target.value)} placeholder="Ex: Ajax Handebol" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm mb-1">Nome que aparecerá no App</label>
+                                            <input type="text" className="w-full bg-slate-800 p-3 rounded border border-slate-600" value={appName} onChange={e => setAppName(e.target.value)} placeholder="Ex: Ajax" />
+                                        </div>
+                                        <button onClick={() => setStep(2)} disabled={!clubName || !appName} className="w-full bg-blue-600 p-3 rounded font-bold mt-4 disabled:opacity-50">Próxima Etapa</button>
+                                    </div>
+                                )}
+
+                                {step === 2 && (
+                                    <div className="space-y-4 text-center">
+                                        <p className="text-sm text-slate-400 mb-4">Envie o logotipo do clube. Ele será convertido e comprimido automaticamente para o formato do banco de dados.</p>
+                                        <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" id="logoUpload" />
+                                        <label htmlFor="logoUpload" className="cursor-pointer border-2 border-dashed border-slate-600 p-10 block rounded-lg hover:border-blue-500 transition">
+                                            {logoBase64 ? (
+                                                <img src={logoBase64} alt="Preview" className="mx-auto h-32 rounded shadow-lg" />
+                                            ) : (
+                                                <div className="text-slate-400">Clique para enviar imagem</div>
+                                            )}
+                                        </label>
+                                        <div className="flex gap-4 mt-6">
+                                            <button onClick={() => setStep(1)} className="flex-1 bg-slate-700 p-3 rounded">Voltar</button>
+                                            <button onClick={() => setStep(3)} disabled={!logoBase64} className="flex-1 bg-blue-600 p-3 rounded font-bold disabled:opacity-50 disabled:bg-red-500">Próxima Etapa</button>
+                                        </div>
+                                        {!logoBase64 && <p className="text-red-400 text-xs mt-2">*O logotipo é obrigatório</p>}
+                                    </div>
+                                )}
+
+                                {step === 3 && (
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm mb-1">Endereço Web do Sistema (URL)</label>
+                                            <input type="url" className="w-full bg-slate-800 p-3 rounded border border-slate-600" value={appUrl} onChange={e => setAppUrl(e.target.value)} placeholder="https://..." />
+                                        </div>
+                                        <div className="flex gap-4 mt-6">
+                                            <button onClick={() => setStep(2)} className="flex-1 bg-slate-700 p-3 rounded">Voltar</button>
+                                            <button onClick={() => setStep(4)} disabled={!appUrl} className="flex-1 bg-blue-600 p-3 rounded font-bold disabled:opacity-50">Próxima Etapa</button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {step === 4 && (
+                                    <div className="space-y-4">
+                                        <div className="bg-slate-800 p-6 rounded text-center">
+                                            <img src={logoBase64} className="mx-auto w-24 h-24 mb-4 rounded-xl shadow-lg" />
+                                            <h3 className="text-xl font-bold">{appName}</h3>
+                                            <p className="text-sm text-slate-400 mt-2">Clube: {clubName}</p>
+                                            <p className="text-xs text-blue-400 mt-1">{appUrl}</p>
+                                        </div>
+                                        <div className="flex gap-4 mt-6">
+                                            <button onClick={() => setStep(3)} className="flex-1 bg-slate-700 p-3 rounded">Voltar</button>
+                                            <button id="btn-gerar" onClick={salvarAppNoSheets} className="flex-1 bg-green-600 hover:bg-green-500 p-3 rounded font-bold shadow-lg shadow-green-500/30">🚀 Gerar e Salvar APK</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {view === 'biblioteca' && (
+                            <div>
+                                <h2 className="text-2xl font-bold mb-6">Biblioteca de Apps</h2>
+                                {apps.length === 0 ? (
+                                    <p className="text-slate-400">Nenhum aplicativo gerado nesta sessão ainda. (Em breve faremos a leitura direto do Sheets)</p>
+                                ) : (
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                                        {apps.map(app => (
+                                            <div key={app.id} className="glass-panel p-5 rounded-xl text-center relative">
+                                                <div className={`absolute top-3 right-3 w-3 h-3 rounded-full ${app.status === 'ATIVO' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                                <img src={app.logo} className="mx-auto w-16 h-16 rounded-xl mb-3" />
+                                                <h3 className="font-bold">{app.appName}</h3>
+                                                <p className="text-xs text-slate-400 mb-4">{app.clubName}</p>
+                                                <button className="text-sm bg-slate-700 w-full p-2 rounded hover:bg-slate-600 transition">Gerenciar</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
