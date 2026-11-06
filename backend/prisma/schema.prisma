@@ -1,0 +1,16 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Admin {
+  id       String @id @default(uuid())
+  email    String @unique
+  password String // Guardaremos a senha criptografada aqui
+}
+
+// ... (Mantenha os modelos AppClub e History que passei anteriormente) ...
